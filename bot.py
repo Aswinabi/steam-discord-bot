@@ -384,16 +384,41 @@ async def fetch_appid(game_name):
 
 
 async def fetch_depots(appid):
-    """Fetch depots from SteamDB"""
+    """Fetch depots from SteamDB with better headers"""
     try:
         url = f"https://steamdb.info/app/{appid}/depots/"
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1"
         }
-        r = requests.get(url, headers=headers, timeout=10)
         
-        depots = re.findall(r'/depot/(\d+)/', r.text)
-        return list(set(depots))  # Remove duplicates
+        r = requests.get(url, headers=headers, timeout=15)
+        
+        if r.status_code == 200:
+            # Try multiple regex patterns to find depots
+            depots1 = re.findall(r'/depot/(\d+)/', r.text)
+            depots2 = re.findall(r'depotid["\']?\s*:\s*["\']?(\d+)', r.text)
+            depots3 = re.findall(r'data-depot-id=["\']?(\d+)', r.text)
+            
+            # Combine all found depots
+            all_depots = depots1 + depots2 + depots3
+            unique_depots = list(set(all_depots))
+            
+            if unique_depots:
+                logger.info(f"Found {len(unique_depots)} depots for AppID {appid}")
+                return unique_depots[:10]  # Return first 10
+            else:
+                logger.warning(f"No depots found for AppID {appid}")
+                return []
+        else:
+            logger.error(f"SteamDB returned status code {r.status_code}")
+            return []
+            
     except Exception as e:
         logger.error(f"Error fetching depots: {e}")
         return []
